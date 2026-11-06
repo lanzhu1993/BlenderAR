@@ -1,0 +1,10 @@
+# 版本锁定(禁止动态版本)。与 Python 3.11/3.12 兼容,已在 macOS 实测。
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.4
+watchdog==6.0.0
+python-multipart==0.0.20
+# 测试
+httpx==0.28.1
+pytest==8.3.4
+pytest-timeout==2.3.1

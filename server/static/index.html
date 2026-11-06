@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BlenderAR 控制台</title>
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #121821; --panel2: #0e141c; --line: #1e2933;
+    --accent: #34CABC; --accent-dim: #1d6e67; --text: #d7e2ea; --text-dim: #7d8f9d;
+    --danger: #e05a6b; --warn: #e0b34f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    font-size: 13px; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; padding: 10px 18px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 16px; font-weight: 600; color: var(--accent); letter-spacing: 1px; }
+  header .badge {
+    padding: 3px 10px; border-radius: 12px; background: var(--panel2);
+    border: 1px solid var(--line); color: var(--text-dim); font-size: 12px;
+  }
+  header .badge b { color: var(--accent); font-weight: 600; }
+  #connState { font-weight: 600; }
+  #connState.ok { color: var(--accent); } #connState.bad { color: var(--danger); } #connState.wait { color: var(--warn); }
+  main { flex: 1; display: grid; grid-template-columns: 260px 1fr 280px; gap: 12px; padding: 12px; min-height: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; min-height: 0; }
+  .panel h2 {
+    font-size: 12px; color: var(--text-dim); font-weight: 600; letter-spacing: 2px;
+    padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel .body { flex: 1; overflow-y: auto; padding: 10px 14px; }
+  /* 左栏 */
+  .effect-item {
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+    margin-bottom: 8px; cursor: pointer; transition: all .15s;
+  }
+  .effect-item:hover { border-color: var(--accent-dim); }
+  .effect-item.active { border-color: var(--accent); background: rgba(52,202,188,.06); }
+  .effect-item .name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .effect-item .meta { font-size: 11px; color: var(--text-dim); }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; }
+  input[type=text] {
+    flex: 1; background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; outline: none; min-width: 0;
+  }
+  input[type=text]:focus { border-color: var(--accent); }
+  button {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); color: #06231f; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.1); color: #06231f; }
+  button.danger:hover { border-color: var(--danger); color: var(--danger); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  /* 中栏 */
+  #previewWrap { position: relative; background: #05070b; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+  #preview { width: 100%; display: block; }
+  #previewTag {
+    position: absolute; left: 10px; bottom: 8px; font-size: 11px; color: var(--text-dim);
+    background: rgba(0,0,0,.45); padding: 3px 8px; border-radius: 6px;
+  }
+  #fps { position: absolute; right: 10px; top: 8px; font-size: 11px; color: var(--accent); background: rgba(0,0,0,.45); padding: 3px 8px; border-radius: 6px; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 22px; padding: 12px 4px; }
+  .param { display: flex; align-items: center; gap: 10px; }
+  .param label { width: 76px; font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
+  .param input[type=range] { flex: 1; accent-color: var(--accent); }
+  .param input[type=color] { width: 34px; height: 24px; border: none; background: none; cursor: pointer; padding: 0; }
+  .param .val { width: 52px; text-align: right; font-size: 12px; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .toolbar { display: flex; gap: 8px; padding: 4px; }
+  /* 右栏 */
+  .device { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .device .dname { font-weight: 600; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 6px; box-shadow: 0 0 6px var(--accent); }
+  .kv { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); padding: 2px 0; }
+  .kv b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .empty { color: var(--text-dim); text-align: center; padding: 30px 0; font-size: 12px; }
+  #toasts { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 9; display: flex; flex-direction: column; gap: 6px; }
+  .toast { background: #1c2530; border: 1px solid var(--line); border-left: 3px solid var(--accent); padding: 8px 16px; border-radius: 6px; font-size: 12px; animation: fadein .2s; }
+  .toast.err { border-left-color: var(--danger); }
+  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } }
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>BlenderAR 控制台</h1>
+  <span class="badge">服务 <b id="srvVer">-</b></span>
+  <span class="badge">配对码 <b id="pairCode">-</b></span>
+  <span class="badge">设备 <b id="devCount">0</b></span>
+  <span class="badge">延迟 <b id="wsLatency">-</b></span>
+  <span style="flex:1"></span>
+  <span id="connState" class="wait">未连接</span>
+</header>
+
+<main>
+  <!-- 左:特效资源 -->
+  <section class="panel">
+    <h2>特效资源 <span id="effectCount">0</span></h2>
+    <div class="body">
+      <div class="row">
+        <input type="text" id="newId" placeholder="新特效 id(如 ice_ring_002)">
+        <input type="text" id="newName" placeholder="名称" style="max-width:90px">
+        <button class="primary" id="btnCreate">创建</button>
+      </div>
+      <div class="row">
+        <input type="file" id="fileInput" style="display:none">
+        <button id="btnUpload" style="flex:1">上传资源</button>
+        <button id="btnExport" style="flex:1" title="调用本机 Blender 重新导出资源">Blender 导出</button>
+      </div>
+      <div id="effectList"></div>
+    </div>
+  </section>
+
+  <!-- 中:预览 + 参数 -->
+  <section class="panel">
+    <h2>特效预览与参数 <span id="curEffectName">-</span></h2>
+    <div class="body">
+      <div id="previewWrap">
+        <canvas id="preview" width="960" height="560"></canvas>
+        <span id="fps">-- FPS</span>
+        <span id="previewTag">示意预览(近似)· 最终效果以手机 AR 渲染为准</span>
+      </div>
+      <div class="toolbar">
+        <button class="primary" id="btnPlay">暂停</button>
+        <button id="btnReset">重置参数</button>
+        <span style="flex:1"></span>
+        <button class="danger" id="btnDelete">删除当前特效</button>
+      </div>
+      <div class="controls" id="paramControls"></div>
+    </div>
+  </section>
+
+  <!-- 右:设备 -->
+  <section class="panel">
+    <h2>Android 设备 <span id="devCount2">0</span></h2>
+    <div class="body" id="deviceList"><div class="empty">暂无设备连接<br>在手机端输入 IP + 配对码</div></div>
+  </section>
+</main>
+<div id="toasts"></div>
+
+<script>
+"use strict";
+// ───────────────────────── 全局状态 ─────────────────────────
+const S = {
+  code: "", ranges: {}, effects: [], currentId: null,
+  params: {},                    // 当前特效参数(权威镜像)
+  revision: 0, playing: true, ws: null, wsUp: false,
+  devices: [], pendingPatch: {}, patchTimer: null,
+};
+const $ = id => document.getElementById(id);
+const clamp = (v, r) => Math.min(r[1], Math.max(r[0], v));
+
+function toast(msg, err) {
+  const d = document.createElement("div");
+  d.className = "toast" + (err ? " err" : "");
+  d.textContent = msg;
+  $("toasts").appendChild(d);
+  setTimeout(() => d.remove(), 3200);
+}
+
+async function api(path, opts = {}) {
+  const sep = path.includes("?") ? "&" : "?";
+  const res = await fetch(path + sep + "code=" + encodeURIComponent(S.code), {
+    headers: { "X-Pairing-Code": S.code }, ...opts,
+  });
+  if (!res.ok) {
+    let msg = "HTTP " + res.status;
+    try { msg = (await res.json()).detail || msg; } catch {}
+    throw new Error(typeof msg === "object" ? JSON.stringify(msg) : msg);
+  }
+  return res.json();
+}
+
+// ───────────────────────── WebSocket ─────────────────────────
+let retryDelay = 2000;
+function connectWS() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${location.host}/ws?code=${encodeURIComponent(S.code)}`);
+  S.ws = ws;
+  ws.onopen = () => { S.wsUp = true; retryDelay = 2000; setConn("ok", "已连接"); };
+  ws.onclose = () => {
+    S.wsUp = false; setConn("bad", "已断开,重连中…");
+    setTimeout(connectWS, retryDelay); retryDelay = Math.min(retryDelay * 2, 15000);
+  };
+  ws.onerror = () => ws.close();
+  ws.onmessage = ev => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    handleMessage(m);
+  };
+}
+function setConn(cls, text) { const el = $("connState"); el.className = cls; el.textContent = text; }
+
+function handleMessage(m) {
+  switch (m.type) {
+    case "server.welcome": {
+      $("srvVer").textContent = m.payload.serverVersion;
+      S.effects = m.payload.effects;
+      for (const [id, st] of Object.entries(m.payload.states || {})) {
+        if (S.currentId === id || !S.currentId) applyState(id, st);
+      }
+      renderEffects();
+      break;
+    }
+    case "effect.update": {
+      if (!m.effectId) break;
+      // origin 非本控制台的 REST 已在 REST 响应里应用;此处统一镜像服务端权威值
+      Object.assign(S.params, m.payload || {});
+      S.revision = m.revision ?? S.revision;
+      syncControls();
+      break;
+    }
+    case "effect.full": {
+      if (m.effectId === S.currentId) { S.params = { ...(m.payload || {}) }; S.revision = m.revision ?? 0; syncControls(); }
+      break;
+    }
+    case "effect.definition": {
+      const i = S.effects.findIndex(e => e.id === m.effectId);
+      if (i >= 0) S.effects[i].version = m.payload.version ?? S.effects[i].version;
+      renderEffects();
+      break;
+    }
+    case "manifest.changed": {
+      // 清单变化:重拉列表(新版本资源会触发手机端增量下载)
+      api("/api/effects").then(data => { S.effects = data.effects || []; renderEffects(); }).catch(() => {});
+      toast("资源已更新(Blender 导出或上传)");
+      break;
+    }
+    case "server.devices": {
+      S.devices = m.payload.devices || [];
+      renderDevices();
+      break;
+    }
+    case "error": {
+      toast(`${m.payload.code}: ${m.payload.message}`, true);
+      break;
+    }
+  }
+}
+
+function applyState(id, st) {
+  S.currentId = id;
+  S.params = { ...(st.parameters || {}) };
+  S.revision = st.revision ?? 0;
+  const e = S.effects.find(x => x.id === id);
+  $("curEffectName").textContent = e ? `${e.name} (v${e.version})` : id;
+  buildControls(); syncControls(); renderEffects();
+}
+
+// ───────────────────────── 渲染:列表 / 设备 / 控件 ─────────────────────────
+function renderEffects() {
+  $("effectCount").textContent = S.effects.length;
+  const box = $("effectList");
+  box.innerHTML = "";
+  for (const e of S.effects) {
+    const d = document.createElement("div");
+    d.className = "effect-item" + (e.id === S.currentId ? " active" : "");
+    const total = (e.files || []).reduce((s, f) => s + (f.sizeBytes || 0), 0);
+    d.innerHTML = `<div class="name">${e.name}</div>
+      <div class="meta">${e.id} · v${e.version} · ${(total / 1024).toFixed(0)} KB · ${ (e.files||[]).length } 个文件</div>`;
+    d.onclick = () => selectEffect(e.id);
+    box.appendChild(d);
+  }
+}
+
+async function selectEffect(id) {
+  if (!id) return;
+  try {
+    const st = await api(`/api/effects/${id}/state`).catch(async () => {
+      // 无专用 state 端点时用定义默认值
+      const def = await api(`/api/effects/${id}`);
+      return { definition: def, parameters: def.parameters, revision: 0 };
+    });
+    applyState(id, st);
+  } catch (e) { toast("加载特效失败: " + e.message, true); }
+}
+
+function renderDevices() {
+  $("devCount").textContent = S.devices.length;
+  $("devCount2").textContent = S.devices.length;
+  const box = $("deviceList");
+  if (!S.devices.length) { box.innerHTML = '<div class="empty">暂无设备连接<br>在手机端输入 IP + 配对码</div>'; return; }
+  box.innerHTML = "";
+  for (const d of S.devices) {
+    const st = d.stats || {};
+    const el = document.createElement("div");
+    el.className = "device";
+    const seen = d.lastSeenAtMs ? Math.max(0, (Date.now() - d.lastSeenAtMs) / 1000).toFixed(0) : "-";
+    el.innerHTML = `
+      <div class="dname"><span><span class="dot"></span>${d.deviceName}</span><span style="color:var(--accent);font-size:11px">在线</span></div>
+      <div class="kv"><span>FPS</span><b>${(st.fps ?? 0).toFixed(0)}</b></div>
+      <div class="kv"><span>帧耗时</span><b>${(st.frameTimeMs ?? 0).toFixed(1)} ms</b></div>
+      <div class="kv"><span>网络延迟</span><b>${st.latencyMs >= 0 ? st.latencyMs.toFixed(0) + " ms" : "-"}</b></div>
+      <div class="kv"><span>实例数</span><b>${st.instanceCount ?? 0}(${(d.instances || []).length})</b></div>
+      <div class="kv"><span>性能档</span><b>${st.performanceLevel || "-"}</b></div>
+      <div class="kv"><span>最后同步</span><b>${seen} 秒前</b></div>
+      <div class="kv"><span>能力</span><b style="font-size:11px">ARCore:${(d.capabilities||{}).arcore ?? "-"} · Depth:${(d.capabilities||{}).depth ? "✓" : "✗"}</b></div>`;
+    box.appendChild(el);
+  }
+}
+
+const NUM_PARAMS = [
+  ["intensity", "火焰强度", 0.1], ["speed", "播放速度", 0.05], ["scale", "特效缩放", 0.05],
+  ["particleCount", "粒子数量", 20], ["ribbonCount", "光带数量", 1], ["opacity", "透明度", 0.01],
+  ["bloomIntensity", "辉光强度", 0.05], ["noiseStrength", "噪声强度", 0.01], ["smokeOpacity", "烟雾浓度", 0.01],
+];
+const COLOR_PARAMS = [["primaryColor", "主颜色"], ["secondaryColor", "次颜色"]];
+
+function buildControls() {
+  const box = $("paramControls");
+  box.innerHTML = "";
+  for (const [key, label, step] of NUM_PARAMS) {
+    const r = S.ranges[key] || [0, 1];
+    const wrap = document.createElement("div");
+    wrap.className = "param";
+    wrap.innerHTML = `<label>${label}</label>
+      <input type="range" data-k="${key}" min="${r[0]}" max="${r[1]}" step="${step}">
+      <span class="val" data-v="${key}"></span>`;
+    box.appendChild(wrap);
+  }
+  for (const [key, label] of COLOR_PARAMS) {
+    const wrap = document.createElement("div");
+    wrap.className = "param";
+    wrap.innerHTML = `<label>${label}</label><input type="color" data-k="${key}">
+      <span class="val" data-v="${key}"></span>`;
+    box.appendChild(wrap);
+  }
+  box.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("input", () => onParamEdit(inp.dataset.k, inp.value));
+  });
+}
+
+function syncControls() {
+  document.querySelectorAll("#paramControls input").forEach(inp => {
+    const k = inp.dataset.k, v = S.params[k];
+    if (v === undefined) return;
+    if (inp.type === "color") inp.value = v; else inp.value = v;
+  });
+  document.querySelectorAll("#paramControls .val").forEach(sp => {
+    const v = S.params[sp.dataset.v];
+    sp.textContent = typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(2)) : (v ?? "-");
+  });
+}
+
+function onParamEdit(key, raw) {
+  let v = raw;
+  if (S.ranges[key]) {
+    if (key.endsWith("Count") || key === "ribbonCount") v = parseInt(raw, 10);
+    else if (!key.endsWith("Color")) v = parseFloat(raw);
+  }
+  S.params[key] = v;
+  S.pendingPatch[key] = v;
+  syncControls();
+  clearTimeout(S.patchTimer);
+  S.patchTimer = setTimeout(pushPatch, 160);   // 防抖:拖动滑块不刷爆网络
+}
+
+async function pushPatch() {
+  if (!S.currentId || !Object.keys(S.pendingPatch).length) return;
+  const patch = S.pendingPatch; S.pendingPatch = {};
+  try {
+    const res = await api(`/api/effects/${S.currentId}/params`, {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Pairing-Code": S.code },
+      body: JSON.stringify({ patch }),
+    });
+    S.params = res.parameters; S.revision = res.revision; syncControls();
+  } catch (e) { toast("参数被拒绝: " + e.message, true); }
+}
+
+// ───────────────────────── 操作按钮 ─────────────────────────
+$("btnCreate").onclick = async () => {
+  const id = $("newId").value.trim(), name = $("newName").value.trim() || id;
+  if (!id) { toast("请输入新特效 id", true); return; }
+  try {
+    await api("/api/effects", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, name, baseOn: S.currentId || "magic_fire_001" }) });
+    toast("已创建 " + name); $("newId").value = ""; $("newName").value = "";
+    S.effects = (await api("/api/effects")).effects || []; renderEffects(); selectEffect(id);
+  } catch (e) { toast("创建失败: " + e.message, true); }
+};
+
+$("btnDelete").onclick = async () => {
+  if (!S.currentId) return;
+  if (!confirm(`确定删除特效「${S.currentId}」?(预设文件移入回收目录,可手动找回)`)) return;
+  try {
+    await api(`/api/effects/${S.currentId}`, { method: "DELETE" });
+    toast("已删除"); S.currentId = null;
+    S.effects = (await api("/api/effects")).effects || []; renderEffects();
+    if (S.effects.length) selectEffect(S.effects[0].id);
+  } catch (e) { toast("删除失败: " + e.message, true); }
+};
+
+$("btnUpload").onclick = () => $("fileInput").click();
+$("fileInput").onchange = async ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  const kind = /\.(glb|gltf)$/i.test(f.name) ? "models" : /\.(png|jpg|ktx)$/i.test(f.name) ? "textures" : "presets";
+  const fd = new FormData(); fd.append("file", f);
+  try {
+    const res = await api(`/api/upload?kind=${kind}`, { method: "POST", body: fd });
+    toast(`已上传 ${res.saved}`);
+  } catch (e) { toast("上传失败: " + e.message, true); }
+  ev.target.value = "";
+};
+
+$("btnExport").onclick = async () => {
+  try {
+    const res = await api("/api/export/blender", { method: "POST" });
+    toast(res.message);
+  } catch (e) { toast("导出失败: " + e.message, true); }
+};
+
+$("btnPlay").onclick = () => {
+  S.playing = !S.playing;
+  $("btnPlay").textContent = S.playing ? "暂停" : "播放";
+};
+$("btnReset").onclick = async () => {
+  if (!S.currentId) return;
+  try {
+    const res = await api(`/api/effects/${S.currentId}/reset`, { method: "POST" });
+    S.params = res.parameters; S.revision = res.revision; syncControls();
+    toast("已重置为默认参数并同步到设备");
+  } catch (e) { toast("重置失败: " + e.message, true); }
+};
+
+// ───────────────────────── Canvas 示意预览 ─────────────────────────
+const cv = $("preview"), cx = cv.getContext("2d");
+let t0 = performance.now(), frames = 0, fpsAt = t0, simT = 0, lastFrame = t0;
+const parts = [];
+function hexToRgb(h) {
+  const n = parseInt((h || "#A83CFF").slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function spawnParticles(count) {
+  while (parts.length < count) {
+    parts.push({ x: 0.5 + (Math.random() - .5) * 0.18, y: 0.95,
+      vx: (Math.random() - .5) * 0.02, vy: -(0.10 + Math.random() * 0.16),
+      life: 0, max: 1.4 + Math.random() * 1.4, size: 3 + Math.random() * 7,
+      gold: Math.random() < 0.45, phase: Math.random() * 6.28 });
+  }
+  while (parts.length > count) parts.pop();
+}
+
+function drawFrame(now) {
+  requestAnimationFrame(drawFrame);
+  const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
+  frames++;
+  if (now - fpsAt > 500) { $("fps").textContent = (frames * 1000 / (now - fpsAt)).toFixed(0) + " FPS"; frames = 0; fpsAt = now; }
+  if (S.playing) simT += dt * (S.params.speed ?? 1);
+
+  const W = cv.width, H = cv.height;
+  const p = S.params;
+  const pri = hexToRgb(p.primaryColor), sec = hexToRgb(p.secondaryColor);
+  const cx0 = W / 2, baseY = H * 0.92, bodyH = H * 0.62 * (p.scale ?? 1), bodyR = W * 0.13 * (p.scale ?? 1);
+  const inten = p.intensity ?? 2.5, opa = (p.opacity ?? 0.85), noise = p.noiseStrength ?? 0.45;
+
+  cx.clearRect(0, 0, W, H);
+  // 地面光晕
+  cx.globalCompositeOperation = "lighter";
+  let g = cx.createRadialGradient(cx0, baseY, 0, cx0, baseY, bodyR * 2.4);
+  g.addColorStop(0, `rgba(${pri[0]},${pri[1]},${pri[2]},${0.10 * inten * opa})`);
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+
+  // 烟雾层(大软斑,慢速上升)
+  cx.globalAlpha = (p.smokeOpacity ?? 0.55) * 0.35;
+  for (let i = 0; i < 3; i++) {
+    const ph = simT * 0.35 + i * 2.1;
+    const sy = baseY - ((ph * 0.22) % 1) * bodyH * 1.3;
+    const sx = cx0 + Math.sin(ph * 1.7) * bodyR * (0.6 + noise * 2);
+    const rr = bodyR * (1.4 + 0.5 * Math.sin(ph));
+    const sg = cx.createRadialGradient(sx, sy, 0, sx, sy, rr);
+    sg.addColorStop(0, `rgba(${pri[0] * .7},${pri[1] * .6},${pri[2]},1)`);
+    sg.addColorStop(1, "rgba(0,0,0,0)");
+    cx.fillStyle = sg;
+    cx.beginPath(); cx.arc(sx, sy, rr, 0, 6.29); cx.fill();
+  }
+  cx.globalAlpha = 1;
+
+  // 核心火焰体:多层摆动椭圆,紫→金渐变
+  const layers = 5;
+  for (let i = layers - 1; i >= 0; i--) {
+    const t = i / (layers - 1);
+    const wob = Math.sin(simT * 2.2 + i * 1.3) * noise * bodyR * 0.5
+              + Math.sin(simT * 5.1 + i * 2.7) * noise * bodyR * 0.22;
+    const ly = baseY - t * bodyH * (0.85 + 0.1 * Math.sin(simT * 3 + i));
+    const lr = bodyR * (1 - t * 0.62) * (1 + 0.12 * Math.sin(simT * 4 + i * 2));
+    const lg = cx.createRadialGradient(cx0 + wob * 0.4, ly, lr * 0.15, cx0 + wob * 0.4, ly, lr);
+    const mix = 0.25 + t * 0.75;
+    const cr = pri[0] * (1 - mix) + sec[0] * mix, cg2 = pri[1] * (1 - mix) + sec[1] * mix, cb = pri[2] * (1 - mix) + sec[2] * mix;
+    lg.addColorStop(0, `rgba(${cr},${cg2},${cb},${(0.55 * opa * Math.min(1.6, inten / 2.5)).toFixed(3)})`);
+    lg.addColorStop(1, "rgba(0,0,0,0)");
+    cx.fillStyle = lg;
+    cx.save(); cx.translate(cx0 + wob, ly); cx.scale(1, 1.35);
+    cx.beginPath(); cx.arc(0, 0, lr, 0, 6.29); cx.fill(); cx.restore();
+  }
+
+  // 光带(参数化螺旋,对应 ribbonShape)
+  const ribbons = p.ribbonCount ?? 4;
+  cx.lineCap = "round";
+  for (let i = 0; i < ribbons; i++) {
+    const phase = i * 6.28 / ribbons + 0.7 * i;
+    cx.beginPath();
+    const steps = 60;
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const ang = t * 2.6 * 6.28 + phase + simT * (0.6 + 0.1 * i);
+      const rr = bodyR * (0.62 + 0.20 * Math.sin(t * 19 + phase)) * (1 + 0.2 * Math.sin(t * 12 + simT));
+      const x = cx0 + rr * Math.cos(ang) * 1.15;
+      const y = baseY - t * bodyH * 1.02 + 8 * Math.sin(t * 30 + simT * 2);
+      if (s === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    }
+    const grad = cx.createLinearGradient(0, baseY, 0, baseY - bodyH);
+    grad.addColorStop(0, `rgba(${pri[0]},${pri[1]},${pri[2]},${0.9 * opa})`);
+    grad.addColorStop(1, `rgba(${sec[0]},${sec[1]},${sec[2]},0)`);
+    cx.strokeStyle = grad;
+    cx.lineWidth = (p.scale ?? 1) * 4.5 * (0.6 + 0.4 * Math.sin(simT * 3 + i));
+    cx.shadowColor = `rgba(${sec[0]},${sec[1]},${sec[2]},0.9)`;
+    cx.shadowBlur = 18 * Math.min(2, inten / 2.5) * (p.bloomIntensity ?? 0.7) * 2;
+    cx.stroke();
+    cx.shadowBlur = 0;
+  }
+
+  // 粒子
+  spawnParticles(Math.min(400, Math.max(0, Math.round((p.particleCount ?? 1200) / 4))));
+  cx.globalCompositeOperation = "lighter";
+  for (const pt of parts) {
+    if (S.playing) {
+      pt.life += dt; pt.x += pt.vx * dt + Math.sin(simT * 3 + pt.phase) * noise * 0.02 * dt;
+      pt.y += pt.vy * dt * (0.6 + inten * 0.2);
+      if (pt.life > pt.max || pt.y < H * 0.05) { pt.y = 0.95; pt.x = 0.5 + (Math.random() - .5) * 0.18; pt.life = 0; }
+    }
+    const a = Math.sin(Math.PI * Math.min(1, pt.life / pt.max)) * opa;
+    const c = pt.gold ? sec : pri;
+    cx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`;
+    cx.beginPath(); cx.arc(pt.x * W, pt.y * H, pt.size * (p.scale ?? 1) * 0.8, 0, 6.29); cx.fill();
+  }
+
+  // 全息扫描线 + 微闪(shaderHints.hologram)
+  cx.globalCompositeOperation = "source-over";
+  cx.fillStyle = "rgba(0,0,0,0.14)";
+  for (let y = 0; y < H; y += 4) cx.fillRect(0, y, W, 1);
+  const flicker = 1 - 0.12 * (0.5 + 0.5 * Math.sin(now / 1000 * 6.283 * 8));
+  cx.fillStyle = `rgba(52,202,188,${(0.03 * flicker).toFixed(3)})`;
+  cx.fillRect(0, 0, W, H);
+}
+requestAnimationFrame(drawFrame);
+
+// ───────────────────────── 启动 ─────────────────────────
+(async function init() {
+  try {
+    const meta = await fetch("/api/meta").then(r => r.json());
+    S.code = meta.pairingCode; S.ranges = meta.paramRanges;
+    $("pairCode").textContent = S.code;
+    buildControls();
+    S.effects = (await api("/api/effects")).effects || [];
+    if (S.effects.length) await selectEffect(S.effects[0].id);
+    connectWS();
+    setInterval(() => { $("wsLatency").textContent = S.wsUp ? "局域网" : "-"; }, 2000);
+  } catch (e) {
+    setConn("bad", "无法获取服务信息");
+    toast("初始化失败: " + e.message, true);
+  }
+})();
+</script>
+</body>
+</html>

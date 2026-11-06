@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+.pytest_cache/
+.venv/
+.idea/
+.gradle/
+.kotlin/
+build/
+local.properties
+*.blend[0-9]*
+*.apk
+*.jks
+*.keystore
+.env
+blender/scenes/fluid_smoke_cache
+assets/*
+!assets/.gitkeep
